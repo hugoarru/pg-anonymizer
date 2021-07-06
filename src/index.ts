@@ -40,6 +40,15 @@ class PgAnonymizer extends Command {
       char: "e",
       description: "the path to your extension module",
     }),
+    excludeTableData: flags.string({
+      char: 't',
+      multiple: true,
+      description: `Do not dump data for any tables matching pattern
+The pattern is interpreted according to the same rules as for -t.
+--exclude-table-data can be given more than once to exclude tables
+matching any of several patterns. This option is useful when you need the
+definition of a particular table even though you do not need the data in it.`.replace('\n', ' ')
+    }),
     output: flags.string({
       char: "o",
       description: "output file",
@@ -56,11 +65,13 @@ class PgAnonymizer extends Command {
     }),
   };
 
-  async originalDump(db: string, memory: number): Promise<string> {
+  async originalDump(db: string, memory: number, excludeTableData: string[] | undefined): Promise<string> {
     const execPromisified = promisify(exec);
     try {
       console.log("Launching pg_dump");
-      const { stdout, stderr } = await execPromisified(`pg_dump ${db}`, {
+      const { stdout, stderr } = await execPromisified(`pg_dump ${db} ${
+        excludeTableData ? excludeTableData.map( pattern => `--exclude-table-data='${pattern}'`).join(' ') : ''
+      }`, {
         maxBuffer: memory * 1024 * 1024,
       });
       if (stderr.trim()) {
@@ -86,7 +97,8 @@ class PgAnonymizer extends Command {
 
     const result = await this.originalDump(
       args.database,
-      Number(flags.pgDumpOutputMemory)
+      Number(flags.pgDumpOutputMemory),
+      flags.excludeTableData,
     );
 
     const list = flags.list.split(",").map((l) => {
